@@ -108,6 +108,74 @@ class DatabaseHelper {
     }
   }
 
+  /// Seeds realistic initial data if the database is empty or upon user reset
+  Future<void> seedInitialData() async {
+    final db = await database;
+    final now = DateTime.now();
+    final sampleExpenses = [
+      Expense(
+        merchant: 'Highlands Coffee',
+        amount: 89000,
+        date: now.subtract(const Duration(days: 0)),
+        category: 'Ăn uống',
+        note: 'Họp ban chủ nhiệm CLB Tin Học VKU',
+        createdAt: now.subtract(const Duration(hours: 2)),
+      ),
+      Expense(
+        merchant: 'WinMart+ Ngũ Hành Sơn',
+        amount: 215000,
+        date: now.subtract(const Duration(days: 1)),
+        category: 'Mua sắm',
+        note: 'Mua bánh kẹo và nước suối cho hội thảo',
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+      Expense(
+        merchant: 'Grab Bike',
+        amount: 32000,
+        date: now.subtract(const Duration(days: 2)),
+        category: 'Di chuyển',
+        note: 'Đi từ KTX VKU đến trung tâm thành phố',
+        createdAt: now.subtract(const Duration(days: 2)),
+      ),
+      Expense(
+        merchant: 'Nhà sách Fahasa Đà Nẵng',
+        amount: 145000,
+        date: now.subtract(const Duration(days: 3)),
+        category: 'Học tập',
+        note: 'Mua tập vẽ giáo trình và bút dạ quang',
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+      Expense(
+        merchant: 'Viettel Telecom',
+        amount: 120000,
+        date: now.subtract(const Duration(days: 4)),
+        category: 'Hóa đơn',
+        note: 'Cước 4G tháng học tập trực tuyến',
+        createdAt: now.subtract(const Duration(days: 4)),
+      ),
+      Expense(
+        merchant: 'Phúc Long Tea & Coffee',
+        amount: 65000,
+        date: now.subtract(const Duration(days: 5)),
+        category: 'Ăn uống',
+        note: 'Trà đào cam sả cùng bạn học',
+        createdAt: now.subtract(const Duration(days: 5)),
+      ),
+      Expense(
+        merchant: 'Cơm tấm Sài Gòn VKU',
+        amount: 35000,
+        date: now.subtract(const Duration(days: 6)),
+        category: 'Ăn uống',
+        note: 'Bữa trưa tại canteen',
+        createdAt: now.subtract(const Duration(days: 6)),
+      ),
+    ];
+
+    for (final expense in sampleExpenses) {
+      await db.insert('expenses', expense.toMap());
+    }
+  }
+
   Future<int> insertExpense(Expense expense) async {
     final db = await database;
     return await db.insert('expenses', expense.toMap());

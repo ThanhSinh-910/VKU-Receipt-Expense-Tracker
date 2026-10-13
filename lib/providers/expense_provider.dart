@@ -43,8 +43,29 @@ class ExpenseProvider with ChangeNotifier {
     notifyListeners();
     try {
       _expenses = await _dbHelper.getAllExpenses();
+      if (_expenses.isEmpty) {
+        // Automatically seed sample data if first run or database was empty
+        await _dbHelper.seedInitialData();
+        _expenses = await _dbHelper.getAllExpenses();
+      }
     } catch (e) {
       debugPrint('Error loading expenses: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Resets database back to realistic sample data
+  Future<void> resetToSampleData() async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _dbHelper.clearAll();
+      await _dbHelper.seedInitialData();
+      _expenses = await _dbHelper.getAllExpenses();
+    } catch (e) {
+      debugPrint('Error resetting sample data: $e');
     } finally {
       _isLoading = false;
       notifyListeners();

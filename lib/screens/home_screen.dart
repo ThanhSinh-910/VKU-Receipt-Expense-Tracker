@@ -98,6 +98,71 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.filter_alt_off),
                     onPressed: () => expenseProvider.setDateRange(null),
                   ),
+                // Menu options
+                PopupMenuButton<String>(
+                  tooltip: 'Tùy chọn khác',
+                  onSelected: (val) async {
+                    if (val == 'reset') {
+                      await expenseProvider.resetToSampleData();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Đã nạp lại dữ liệu hóa đơn mẫu VKU!'),
+                            backgroundColor: Colors.teal,
+                          ),
+                        );
+                      }
+                    } else if (val == 'clear') {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Xác nhận'),
+                          content: const Text('Bạn có chắc muốn xóa toàn bộ danh sách hóa đơn?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Hủy'),
+                            ),
+                            FilledButton(
+                              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Xóa hết'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        for (final exp in expenseProvider.expenses) {
+                          if (exp.id != null) {
+                            await expenseProvider.deleteExpense(exp.id!);
+                          }
+                        }
+                      }
+                    }
+                  },
+                  itemBuilder: (ctx) => const [
+                    PopupMenuItem(
+                      value: 'reset',
+                      child: Row(
+                        children: [
+                          Icon(Icons.refresh, color: Colors.teal, size: 20),
+                          SizedBox(width: 8),
+                          Text('Nạp lại dữ liệu mẫu VKU'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'clear',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_sweep, color: Colors.red, size: 20),
+                          SizedBox(width: 8),
+                          Text('Xóa tất cả hóa đơn'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ],
               flexibleSpace: FlexibleSpaceBar(
                 background: Container(
@@ -298,6 +363,14 @@ class _HomeScreenState extends State<HomeScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => ExpenseDetailScreen(expense: expense),
+                            ),
+                          );
+                        },
+                        onEdit: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ReviewExpenseScreen(existingExpense: expense),
                             ),
                           );
                         },

@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/ocr_service.dart';
-import '../services/regex_parser.dart';
+import '../services/receipt_image_generator.dart';
 import 'review_expense_screen.dart';
 
 class ScannerScreen extends StatefulWidget {
@@ -12,7 +13,8 @@ class ScannerScreen extends StatefulWidget {
   State<ScannerScreen> createState() => _ScannerScreenState();
 }
 
-class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProviderStateMixin {
+class _ScannerScreenState extends State<ScannerScreen>
+    with SingleTickerProviderStateMixin {
   final ImagePicker _picker = ImagePicker();
   final OcrService _ocrService = OcrService();
   bool _isProcessing = false;
@@ -28,7 +30,6 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
-
     _scanAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _scanAnimController, curve: Curves.easeInOut),
     );
@@ -40,29 +41,59 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  // ─── Chụp ảnh hoặc chọn từ thư viện ───────────────────────────────────────
   Future<void> _captureOrPickImage(ImageSource source) async {
     try {
+      // Khi dùng Camera, xin quyền máy ảnh một cách nhẹ nhàng
+      if (source == ImageSource.camera && Platform.isAndroid) {
+        final status = await Permission.camera.request();
+        if (status.isPermanentlyDenied) {
+          if (!mounted) return;
+          final open = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Cần quyền máy ảnh'),
+              content: const Text(
+                'Vui lòng cấp quyền Máy ảnh trong Cài đặt để có thể chụp ảnh hóa đơn.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Hủy'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Mở Cài đặt'),
+                ),
+              ],
+            ),
+          );
+          if (open == true) openAppSettings();
+          return;
+        }
+      }
+
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
         imageQuality: 90,
+        maxWidth: 2048,
+        maxHeight: 2048,
       );
 
       if (pickedFile == null) return;
 
       setState(() {
         _isProcessing = true;
-        _statusMessage = 'Đang nhận diện văn bản bằng AI Google ML Kit...';
+        _statusMessage = 'Đang nhận diện hóa đơn bằng AI Google ML Kit...';
       });
 
       final imageFile = File(pickedFile.path);
       final ocrResult = await _ocrService.processReceipt(imageFile.path);
 
       if (!mounted) return;
-      setState(() {
-        _isProcessing = false;
-      });
+      setState(() => _isProcessing = false);
 
-      // Navigate to Review Screen
+      // Mở màn hình xác thực Review
       final saved = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
@@ -74,104 +105,60 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       );
 
       if (saved == true && mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _isProcessing = false;
-      });
+      setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Lỗi quét hóa đơn: $e'),
-          backgroundColor: Colors.red,
+          content: Text('Lỗi: $e. Hãy thử lại hoặc dùng mục Hóa đơn mẫu bên dưới.'),
+          backgroundColor: Colors.orange.shade800,
         ),
       );
     }
   }
 
-  /// Provides instant test samples (useful for demo without camera or on emulators)
-  void _testWithSampleReceipt(String receiptType) async {
+  // ─── Demo với hóa đơn mẫu (Tạo ảnh hóa đơn thật + Chạy OCR) ───────────────
+  Future<void> _testWithSampleReceipt(String type) async {
     setState(() {
       _isProcessing = true;
-      _statusMessage = 'Đang nạp hóa đơn mẫu và chạy Regex Parser...';
+      _statusMessage = 'Đang nạp ảnh hóa đơn thật và nhận diện bằng ML Kit...';
     });
 
-    await Future.delayed(const Duration(milliseconds: 600));
+    try {
+      // 1. Tạo file ảnh PNG hóa đơn thật
+      final imageFile = await ReceiptImageGenerator.generateReceiptImage(type);
 
-    String sampleRawText = '';
-    if (receiptType == 'highlands') {
-      sampleRawText = '''
-HIGHLANDS COFFEE
-Tầng 1 TTTM Vincom Đà Nẵng
-Đ/C: 910A Ngô Quyền, Sơn Trà, Đà Nẵng
-Số HĐ: HD90483
-Ngày: 12/10/2026 09:20:15
-Thu ngân: Hương Ly
+      // 2. Chạy qua pipeline OCR thực tế
+      final ocrResult = await _ocrService.processReceipt(imageFile.path);
 
-1. Phin Sữa Tươi (L)        45,000
-2. Trà Thạch Đào (M)        49,000
-3. Bánh Croissant           29,000
------------------------------------
-CỘNG TIỀN:                 123,000
-THUẾ VAT (8%):               9,840
-TỔNG CỘNG:                 132,840 VNĐ
-TIỀN MẶT:                  150,000
-TIỀN THỐI:                  17,160
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
 
-CẢM ƠN QUÝ KHÁCH - HẸN GẶP LẠI!
-''';
-    } else if (receiptType == 'winmart') {
-      sampleRawText = '''
-SIÊU THỊ WINMART+
-Cửa hàng: 142 Ngô Thì Sĩ, Đà Nẵng
-Ngày bán: 11/10/2026 18:45:00
-Mã giao dịch: WM-20261011-094
-
-Bánh mì sandwich           18,000
-Sữa tươi TH True Milk      36,000
-Mì tôm Hảo Hảo (5 gói)     22,500
-Snack khoai tây Ostar      14,000
------------------------------------
-THÀNH TIỀN:                90,500 đ
-GIẢM GIÁ THÀNH VIÊN:            0
-THANH TOÁN:                90,500 đ
-''';
-    } else {
-      sampleRawText = '''
-NHÀ SÁCH FAHASA ĐÀ NẴNG
-300-302 Lê Duẩn, Tân Chính, Thanh Khê
-Ngày: 10/10/2026 15:10:00
-
-Sổ tay A5 Lò xo VKU         35,000
-Bút bi Pilot G2 (x2)        64,000
-Bút dạ quang Highlighter    18,000
------------------------------------
-TỔNG TIỀN:                 117,000 VNĐ
-TIỀN KHÁCH ĐƯA:            120,000
-TIỀN TRẢ LẠI:                3,000
-''';
-    }
-
-    final ocrResult = RegexParserEngine.parse(sampleRawText);
-
-    if (!mounted) return;
-    setState(() {
-      _isProcessing = false;
-    });
-
-    final saved = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ReviewExpenseScreen(
-          imageFile: null,
-          ocrResult: ocrResult,
+      // 3. Mở màn hình Review với ảnh hóa đơn thật và dữ liệu đã trích xuất
+      final saved = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReviewExpenseScreen(
+            imageFile: imageFile,
+            ocrResult: ocrResult,
+          ),
         ),
-      ),
-    );
+      );
 
-    if (saved == true && mounted) {
-      Navigator.pop(context);
+      if (saved == true && mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi nạp hóa đơn mẫu: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -203,9 +190,12 @@ TIỀN TRẢ LẠI:                3,000
                             ),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.receipt_long, size: 70, color: Colors.grey),
+                          child: const Icon(
+                            Icons.receipt_long,
+                            size: 70,
+                            color: Colors.grey,
+                          ),
                         ),
-                        // Animated scanner line
                         AnimatedBuilder(
                           animation: _scanAnimation,
                           builder: (context, child) {
@@ -218,7 +208,8 @@ TIỀN TRẢ LẠI:                3,000
                                   color: Colors.redAccent,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.redAccent.withValues(alpha: 0.8),
+                                      color: Colors.redAccent
+                                          .withValues(alpha: 0.8),
                                       blurRadius: 8,
                                       spreadRadius: 2,
                                     ),
@@ -238,6 +229,13 @@ TIỀN TRẢ LẠI:                3,000
                       textAlign: TextAlign.center,
                       style: theme.textTheme.titleMedium,
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Mô hình Google ML Kit đang quét ký tự on-device...',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.hintColor),
+                    ),
                   ],
                 ),
               ),
@@ -247,9 +245,9 @@ TIỀN TRẢ LẠI:                3,000
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Scanner graphic / tip
+                  // Banner giới thiệu
                   Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -265,19 +263,18 @@ TIỀN TRẢ LẠI:                3,000
                       children: [
                         Icon(
                           Icons.document_scanner,
-                          size: 72,
+                          size: 64,
                           color: theme.colorScheme.primary,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         Text(
-                          'Quét tự động hóa đơn',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          'Quét Tự Động Bằng AI OCR',
+                          style: theme.textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
-                          'Chụp ảnh hoặc chọn hóa đơn từ thư viện. Mô hình Google ML Kit on-device sẽ nhận diện số tiền, ngày và tên cửa hàng.',
+                          'Chụp trực tiếp từ Camera, chọn từ Thư viện ảnh, hoặc thử ngay với Kho Hóa Đơn Mẫu có sẵn (hỗ trợ kiểm thử trên máy ảo Android Studio).',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
@@ -286,77 +283,156 @@ TIỀN TRẢ LẠI:                3,000
                       ],
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
 
-                  // Capture Buttons
+                  // Nút Chụp Camera
                   FilledButton.icon(
                     onPressed: () => _captureOrPickImage(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt, size: 24),
-                    label: const Text('CHỤP TỪ MÁY ẢNH (CAMERA)', style: TextStyle(fontSize: 16)),
+                    icon: const Icon(Icons.camera_alt, size: 22),
+                    label: const Text(
+                      'CHỤP ẢNH TỪ MÁY ẢNH (CAMERA)',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
                     style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
 
+                  // Nút Chọn Thư viện
                   OutlinedButton.icon(
                     onPressed: () => _captureOrPickImage(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library, size: 24),
-                    label: const Text('CHỌN TỪ THƯ VIỆN ẢNH', style: TextStyle(fontSize: 16)),
+                    icon: const Icon(Icons.photo_library, size: 22),
+                    label: const Text(
+                      'CHỌN ẢNH TỪ THƯ VIỆN',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 12),
 
-                  // Divider with Sample Receipts for Demo
+                  // Nút Nhập thủ công
+                  TextButton.icon(
+                    onPressed: () async {
+                      final saved = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ReviewExpenseScreen(),
+                        ),
+                      );
+                      if (!context.mounted) return;
+                      if (saved == true) {
+                        Navigator.pop(context, true);
+                      }
+                    },
+                    icon: const Icon(Icons.edit_note),
+                    label: const Text('Hoặc nhập chi tiêu thủ công không dùng ảnh'),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Header Hóa đơn mẫu
                   Row(
                     children: [
                       const Expanded(child: Divider()),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          'HÓA ĐƠN THỬ NGHIỆM DEMO',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: theme.hintColor,
-                          ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.auto_awesome, size: 16, color: theme.colorScheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'KHO HÓA ĐƠN MẪU THỬ NGHIỆM',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const Expanded(child: Divider()),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
-                  // Quick test cards
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      ActionChip(
-                        avatar: const Icon(Icons.coffee, size: 18),
-                        label: const Text('Highlands Coffee (132k)'),
-                        onPressed: () => _testWithSampleReceipt('highlands'),
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.shopping_cart, size: 18),
-                        label: const Text('WinMart+ (90.5k)'),
-                        onPressed: () => _testWithSampleReceipt('winmart'),
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.menu_book, size: 18),
-                        label: const Text('Nhà sách Fahasa (117k)'),
-                        onPressed: () => _testWithSampleReceipt('fahasa'),
-                      ),
-                    ],
+                  // Danh sách hóa đơn mẫu dạng Card
+                  _buildSampleCard(
+                    title: 'Highlands Coffee (Đà Nẵng)',
+                    subtitle: 'Trà sen vàng, Phin sữa đá • 122.040 đ',
+                    icon: Icons.coffee,
+                    color: const Color(0xFFF97316),
+                    onTap: () => _testWithSampleReceipt('highlands'),
                   ),
+                  const SizedBox(height: 8),
+
+                  _buildSampleCard(
+                    title: 'Siêu thị WinMart+ (Ngũ Hành Sơn)',
+                    subtitle: 'Bánh mì, sữa tươi, mì tôm • 90.500 đ',
+                    icon: Icons.shopping_cart,
+                    color: const Color(0xFF0D9488),
+                    onTap: () => _testWithSampleReceipt('winmart'),
+                  ),
+                  const SizedBox(height: 8),
+
+                  _buildSampleCard(
+                    title: 'Nhà sách Fahasa (Lê Duẩn)',
+                    subtitle: 'Sổ tay VKU, bút bi Pilot • 117.000 đ',
+                    icon: Icons.menu_book,
+                    color: const Color(0xFF8B5CF6),
+                    onTap: () => _testWithSampleReceipt('fahasa'),
+                  ),
+                  const SizedBox(height: 8),
+
+                  _buildSampleCard(
+                    title: 'Grab Bike (KTX VKU -> Trung tâm)',
+                    subtitle: 'Chuyến xe di chuyển • 32.000 đ',
+                    icon: Icons.directions_bike,
+                    color: const Color(0xFF3B82F6),
+                    onTap: () => _testWithSampleReceipt('grab'),
+                  ),
+                  const SizedBox(height: 30),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildSampleCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: color.withValues(alpha: 0.15),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+        trailing: FilledButton.tonal(
+          onPressed: onTap,
+          style: FilledButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+          ),
+          child: const Text('Quét thử', style: TextStyle(fontSize: 12)),
+        ),
+        onTap: onTap,
+      ),
     );
   }
 }

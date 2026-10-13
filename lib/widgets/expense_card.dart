@@ -7,12 +7,14 @@ class ExpenseCard extends StatelessWidget {
   final Expense expense;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final VoidCallback? onEdit;
 
   const ExpenseCard({
     super.key,
     required this.expense,
     required this.onTap,
     required this.onDelete,
+    this.onEdit,
   });
 
   IconData _getCategoryIcon(String category) {
@@ -186,7 +188,7 @@ class ExpenseCard extends StatelessWidget {
                   ),
                 ),
 
-                // Amount
+                // Amount & Actions
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -197,15 +199,67 @@ class ExpenseCard extends StatelessWidget {
                         color: theme.colorScheme.primary,
                       ),
                     ),
-                    if (expense.imagePath != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Icon(
-                          Icons.receipt_outlined,
-                          size: 16,
-                          color: theme.hintColor,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (expense.imagePath != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Icon(
+                              Icons.receipt_outlined,
+                              size: 16,
+                              color: theme.hintColor,
+                            ),
+                          ),
+                        PopupMenuButton<String>(
+                          padding: EdgeInsets.zero,
+                          iconSize: 18,
+                          splashRadius: 18,
+                          icon: Icon(Icons.more_vert, color: theme.hintColor, size: 18),
+                          onSelected: (val) {
+                            if (val == 'edit' && onEdit != null) {
+                              onEdit!();
+                            } else if (val == 'delete') {
+                              onDelete();
+                            } else if (val == 'detail') {
+                              onTap();
+                            }
+                          },
+                          itemBuilder: (ctx) => [
+                            const PopupMenuItem(
+                              value: 'detail',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.visibility_outlined, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Xem chi tiết'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_outlined, size: 18, color: Colors.blue),
+                                  SizedBox(width: 8),
+                                  Text('Sửa'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Xóa', style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
+                      ],
+                    ),
                   ],
                 ),
               ],

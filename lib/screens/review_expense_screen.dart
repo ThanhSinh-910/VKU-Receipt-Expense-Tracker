@@ -33,6 +33,12 @@ class _ReviewExpenseScreenState extends State<ReviewExpenseScreen> {
   bool _showRawOcr = false;
   File? _currentImageFile;
 
+  /// Validates that the given category is in Expense.categories list
+  String _validatedCategory(String? cat) {
+    if (cat != null && Expense.categories.contains(cat)) return cat;
+    return Expense.categories.first;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -41,11 +47,12 @@ class _ReviewExpenseScreenState extends State<ReviewExpenseScreen> {
     if (widget.existingExpense != null) {
       final exp = widget.existingExpense!;
       _merchantController = TextEditingController(text: exp.merchant);
-      _amountController = TextEditingController(text: exp.amount.toStringAsFixed(0));
+      _amountController =
+          TextEditingController(text: exp.amount.toStringAsFixed(0));
       _noteController = TextEditingController(text: exp.note ?? '');
       _selectedDate = exp.date;
-      _selectedCategory = exp.category;
-      if (exp.imagePath != null) {
+      _selectedCategory = _validatedCategory(exp.category);
+      if (exp.imagePath != null && File(exp.imagePath!).existsSync()) {
         _currentImageFile = File(exp.imagePath!);
       }
     } else if (widget.ocrResult != null) {
@@ -56,13 +63,13 @@ class _ReviewExpenseScreenState extends State<ReviewExpenseScreen> {
       );
       _noteController = TextEditingController(text: '');
       _selectedDate = res.date;
-      _selectedCategory = res.category;
+      _selectedCategory = _validatedCategory(res.category);
     } else {
       _merchantController = TextEditingController();
       _amountController = TextEditingController();
       _noteController = TextEditingController();
       _selectedDate = DateTime.now();
-      _selectedCategory = 'Ăn uống';
+      _selectedCategory = Expense.categories.first;
     }
   }
 
@@ -88,12 +95,51 @@ class _ReviewExpenseScreenState extends State<ReviewExpenseScreen> {
     }
   }
 
+  double _parseVndAmount(String input) {
+    var raw = input.trim();
+    if (raw.toLowerCase().endsWith('k')) {
+      final numPart = double.tryParse(raw.substring(0, raw.length - 1).replaceAll(',', '.')) ?? 0.0;
+      return numPart * 1000;
+    }
+    raw = raw.replaceAll(RegExp(r'[^\d.,]'), '');
+    if (raw.contains('.') && raw.contains(',')) {
+      if (raw.indexOf('.') < raw.indexOf(',')) {
+        raw = raw.replaceAll('.', '').replaceAll(',', '.');
+      } else {
+        raw = raw.replaceAll(',', '');
+      }
+      return double.tryParse(raw) ?? 0.0;
+    } else if (raw.contains('.')) {
+      final parts = raw.split('.');
+      if (parts.length > 1 && parts.last.length == 3) {
+        return double.tryParse(raw.replaceAll('.', '')) ?? 0.0;
+      } else if (parts.length > 2) {
+        return double.tryParse(raw.replaceAll('.', '')) ?? 0.0;
+      }
+      return double.tryParse(raw) ?? 0.0;
+    } else if (raw.contains(',')) {
+      final parts = raw.split(',');
+      if (parts.length > 1 && parts.last.length == 3) {
+        return double.tryParse(raw.replaceAll(',', '')) ?? 0.0;
+      }
+      return double.tryParse(raw.replaceAll(',', '.')) ?? 0.0;
+    }
+    return double.tryParse(raw.replaceAll(RegExp(r'[^\d]'), '')) ?? 0.0;
+  }
+
+  void _addQuickAmount(double delta) {
+    final current = _parseVndAmount(_amountController.text);
+    final next = (current + delta).clamp(0.0, 1000000000.0);
+    setState(() {
+      _amountController.text = next.toStringAsFixed(0);
+    });
+  }
+
   Future<void> _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
 
     final merchant = _merchantController.text.trim();
-    final amountClean = _amountController.text.replaceAll(RegExp(r'[^\d.]'), '');
-    final amount = double.tryParse(amountClean) ?? 0.0;
+    final amount = _parseVndAmount(_amountController.text);
     final note = _noteController.text.trim();
 
     final expenseProvider = Provider.of<ExpenseProvider>(context, listen: false);
@@ -267,10 +313,10 @@ class _ReviewExpenseScreenState extends State<ReviewExpenseScreen> {
               // Total Amount Field
               TextFormField(
                 controller: _amountController,
-                keyboardType: TextInputType.number,
+                keyboardType: TextInputType.text,
                 decoration: InputDecoration(
                   labelText: 'Tổng tiền (VND)',
-                  hintText: 'VD: 85000',
+                  hintText: 'VD: 85000 hoặc 85.000 hoặc 85k',
                   prefixIcon: const Icon(Icons.payments_outlined),
                   suffixText: '₫',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -279,14 +325,46 @@ class _ReviewExpenseScreenState extends State<ReviewExpenseScreen> {
                   if (val == null || val.trim().isEmpty) {
                     return 'Vui lòng nhập số tiền';
                   }
-                  final clean = val.replaceAll(RegExp(r'[^\d.]'), '');
-                  if (double.tryParse(clean) == null || double.parse(clean) <= 0) {
-                    return 'Số tiền không hợp lệ';
+                  final parsed = _parseVndAmount(val);
+                  if (parsed <= 0) {
+                    return 'Số tiền không hợp lệ (phải lớn hơn 0)';
                   }
                   return null;
                 },
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 6),
+
+              // Quick amount adjustment chips
+              Row(
+                children: [
+                  const Text('Tăng nhanh: ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(width: 4),
+                  ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    label: const Text('+10k', style: TextStyle(fontSize: 11)),
+                    onPressed: () => _addQuickAmount(10000),
+                  ),
+                  const SizedBox(width: 6),
+                  ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    label: const Text('+50k', style: TextStyle(fontSize: 11)),
+                    onPressed: () => _addQuickAmount(50000),
+                  ),
+                  const SizedBox(width: 6),
+                  ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    label: const Text('+100k', style: TextStyle(fontSize: 11)),
+                    onPressed: () => _addQuickAmount(100000),
+                  ),
+                  const SizedBox(width: 6),
+                  ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    label: const Text('+200k', style: TextStyle(fontSize: 11)),
+                    onPressed: () => _addQuickAmount(200000),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
 
               // Date Field with Picker
               InkWell(
@@ -307,27 +385,32 @@ class _ReviewExpenseScreenState extends State<ReviewExpenseScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Category Dropdown
-              DropdownButtonFormField<String>(
-                initialValue: _selectedCategory,
+              // Category Dropdown — dùng InputDecorator + DropdownButton để tránh API lỗi thời
+              InputDecorator(
                 decoration: InputDecoration(
                   labelText: 'Danh mục chi tiêu',
                   prefixIcon: const Icon(Icons.category_outlined),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                items: Expense.categories.map((cat) {
-                  return DropdownMenuItem<String>(
-                    value: cat,
-                    child: Text(cat),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _selectedCategory = val;
-                    });
-                  }
-                },
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedCategory,
+                    isExpanded: true,
+                    isDense: true,
+                    items: Expense.categories.map((cat) {
+                      return DropdownMenuItem<String>(
+                        value: cat,
+                        child: Text(cat),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedCategory = val);
+                      }
+                    },
+                  ),
+                ),
               ),
               const SizedBox(height: 14),
 

@@ -14,6 +14,11 @@ class ExpenseDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final expenseProvider = Provider.of<ExpenseProvider>(context);
+    final currentExpense = expenseProvider.expenses.firstWhere(
+      (e) => e.id == expense.id,
+      orElse: () => expense,
+    );
     final currencyFormatter = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0);
     final dateFormatter = DateFormat('dd/MM/yyyy HH:mm');
 
@@ -25,15 +30,12 @@ class ExpenseDetailScreen extends StatelessWidget {
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'Chỉnh sửa',
             onPressed: () async {
-              final result = await Navigator.push<bool>(
+              await Navigator.push<bool>(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ReviewExpenseScreen(existingExpense: expense),
+                  builder: (_) => ReviewExpenseScreen(existingExpense: currentExpense),
                 ),
               );
-              if (result == true && context.mounted) {
-                Navigator.pop(context);
-              }
             },
           ),
           IconButton(
@@ -72,14 +74,14 @@ class ExpenseDetailScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Receipt Image Preview
-            if (expense.imagePath != null && File(expense.imagePath!).existsSync()) ...[
+            if (currentExpense.imagePath != null && File(currentExpense.imagePath!).existsSync()) ...[
               GestureDetector(
                 onTap: () {
                   showDialog(
                     context: context,
                     builder: (ctx) => Dialog(
                       child: InteractiveViewer(
-                        child: Image.file(File(expense.imagePath!)),
+                        child: Image.file(File(currentExpense.imagePath!)),
                       ),
                     ),
                   );
@@ -98,7 +100,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Image.file(
-                    File(expense.imagePath!),
+                    File(currentExpense.imagePath!),
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -115,7 +117,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     Text(
-                      expense.merchant,
+                      currentExpense.merchant,
                       textAlign: TextAlign.center,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
@@ -123,7 +125,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      currencyFormatter.format(expense.amount),
+                      currencyFormatter.format(currentExpense.amount),
                       style: theme.textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
@@ -132,7 +134,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     Chip(
                       label: Text(
-                        expense.category,
+                        currentExpense.category,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       backgroundColor: theme.colorScheme.primaryContainer,
@@ -152,20 +154,20 @@ class ExpenseDetailScreen extends StatelessWidget {
                   ListTile(
                     leading: const Icon(Icons.calendar_today),
                     title: const Text('Ngày thanh toán'),
-                    subtitle: Text(DateFormat('dd/MM/yyyy').format(expense.date)),
+                    subtitle: Text(DateFormat('dd/MM/yyyy').format(currentExpense.date)),
                   ),
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.access_time),
                     title: const Text('Thời gian tạo'),
-                    subtitle: Text(dateFormatter.format(expense.createdAt)),
+                    subtitle: Text(dateFormatter.format(currentExpense.createdAt)),
                   ),
-                  if (expense.note != null && expense.note!.isNotEmpty) ...[
+                  if (currentExpense.note != null && currentExpense.note!.isNotEmpty) ...[
                     const Divider(height: 1),
                     ListTile(
                       leading: const Icon(Icons.notes),
                       title: const Text('Ghi chú'),
-                      subtitle: Text(expense.note!),
+                      subtitle: Text(currentExpense.note!),
                     ),
                   ],
                 ],
@@ -174,7 +176,7 @@ class ExpenseDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Raw OCR data if saved
-            if (expense.rawOcrText != null && expense.rawOcrText!.isNotEmpty) ...[
+            if (currentExpense.rawOcrText != null && currentExpense.rawOcrText!.isNotEmpty) ...[
               ExpansionTile(
                 title: const Text('Văn bản nhận diện từ OCR'),
                 leading: const Icon(Icons.document_scanner),
@@ -184,7 +186,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                     padding: const EdgeInsets.all(12),
                     color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                     child: SelectableText(
-                      expense.rawOcrText!,
+                      currentExpense.rawOcrText!,
                       style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                     ),
                   ),
