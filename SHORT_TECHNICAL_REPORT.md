@@ -11,7 +11,7 @@
   1. Nguyễn Thanh Sinh — Student ID: [22ITxxx] — Role: Full-stack Mobile Architecture & Core Logic — Contribution: [100%]
 * **🔗 Live Demo / APK Deliverable:** [Download Signed app-release.apk](https://github.com/ThanhSinh-910/VKU-Receipt-Expense-Tracker/raw/master/app-release.apk) *(Cũng có sẵn tại thư mục gốc dự án: `./app-release.apk`)*
 * **💻 GitHub Repository:** [https://github.com/ThanhSinh-910/VKU-Receipt-Expense-Tracker](https://github.com/ThanhSinh-910/VKU-Receipt-Expense-Tracker)
-* **🎥 Video Demo (Optional):** [Link Video YouTube / Drive Demo nếu có]
+* **🎥 Video Demo:** [Watch Demo Video (vid_demo_mnprj3.mp4)](https://github.com/ThanhSinh-910/VKU-Receipt-Expense-Tracker/blob/master/vid_demo_mnprj3.mp4) *(Xem trực tiếp trên GitHub hoặc tệp `vid_demo_mnprj3.mp4` tại thư mục gốc)*
 
 ---
 

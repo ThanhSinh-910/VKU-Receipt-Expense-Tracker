@@ -20,7 +20,8 @@
 - ✨ **UI/UX Polish (1.0 pt):** Giao diện Material 3, Dark Mode toggle tức thì, Responsive layout, hộp thoại **Review & Manual Correction Dialog** hỗ trợ người dùng kiểm tra và điều chỉnh thông tin trước khi lưu.
 - 📦 **Deliverables & Report (1.0 pt):**
   - Tệp **Signed Release APK:** [`app-release.apk`](app-release.apk) (đã biên dịch sẵn ở thư mục gốc).
-  - Báo cáo kỹ thuật chi tiết: [`TECHNICAL_REPORT.md`](TECHNICAL_REPORT.md).
+  - 🎥 **Video Demo Ứng Dụng:** [`vid_demo_mnprj3.mp4`](vid_demo_mnprj3.mp4) (chạy trực tiếp trên thiết bị thực tế).
+  - Báo cáo kỹ thuật chi tiết: [`TECHNICAL_REPORT.md`](TECHNICAL_REPORT.md) & [`SHORT_TECHNICAL_REPORT.md`](SHORT_TECHNICAL_REPORT.md).
   - Bộ kiểm thử tự động `flutter test` đạt 100%.
 
 ---
